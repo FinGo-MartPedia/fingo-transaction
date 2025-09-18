@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"github.com/fingo-martpedia/fingo-transaction/external"
 	"github.com/fingo-martpedia/fingo-transaction/helpers"
 	"github.com/fingo-martpedia/fingo-transaction/internal/controller"
 	"github.com/fingo-martpedia/fingo-transaction/internal/interfaces"
@@ -30,6 +31,9 @@ func InitDependency() Dependency {
 
 		services.NewTransactionService,
 		wire.Bind(new(interfaces.ITransactionService), new(*services.TransactionService)),
+
+		external.NewWalletExternal,
+		wire.Bind(new(interfaces.IWalletExternal), new(*external.WalletExternal)),
 
 		controller.NewTransactionController,
 		wire.Bind(new(interfaces.ITransactionController), new(*controller.TransactionController)),

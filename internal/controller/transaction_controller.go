@@ -7,6 +7,7 @@ import (
 	"github.com/fingo-martpedia/fingo-transaction/helpers"
 	"github.com/fingo-martpedia/fingo-transaction/internal/interfaces"
 	"github.com/fingo-martpedia/fingo-transaction/internal/models"
+	"github.com/fingo-martpedia/fingo-transaction/internal/models/requests"
 	"github.com/gin-gonic/gin"
 )
 
@@ -75,4 +76,37 @@ func (api *TransactionController) CreateTransaction(c *gin.Context) {
 	}
 
 	helpers.SendResponse(c, http.StatusOK, constants.SuccessMessage, resp, nil)
+}
+
+func (api *TransactionController) UpdateStatusTransaction(c *gin.Context) {
+	var (
+		log    = helpers.Logger
+		req    requests.UpdateStatusTransaction
+		errMsg string
+	)
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Error("failed to parse request: ", err)
+		errMsg = err.Error()
+		helpers.SendResponse(c, http.StatusBadRequest, constants.ErrFailedBadRequest, nil, &errMsg)
+		return
+	}
+	req.Reference = c.Param("reference")
+	if err := req.Validate(); err != nil {
+		log.Error("failed to validate request: ", err)
+		errMsg = err.Error()
+		helpers.SendResponse(c, http.StatusBadRequest, constants.ErrFailedBadRequest, nil, &errMsg)
+		return
+	}
+
+	tokenData := c.Request.Header.Get("Authorization")
+	err := api.TransactionService.UpdateStatusTransaction(c.Request.Context(), tokenData, &req)
+	if err != nil {
+		log.Error("failed to create transaction: ", err)
+		errMsg = err.Error()
+		helpers.SendResponse(c, http.StatusInternalServerError, constants.ErrFailedServerError, nil, &errMsg)
+		return
+	}
+
+	helpers.SendResponse(c, http.StatusOK, constants.SuccessMessage, nil, nil)
 }

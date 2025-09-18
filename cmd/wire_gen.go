@@ -7,6 +7,7 @@
 package cmd
 
 import (
+	"github.com/fingo-martpedia/fingo-transaction/external"
 	"github.com/fingo-martpedia/fingo-transaction/helpers"
 	"github.com/fingo-martpedia/fingo-transaction/internal/controller"
 	"github.com/fingo-martpedia/fingo-transaction/internal/interfaces"
@@ -20,7 +21,8 @@ import (
 func InitDependency() Dependency {
 	db := provideDB()
 	transactionRepository := repository.NewTransactionRepository(db)
-	transactionService := services.NewTransactionService(transactionRepository)
+	walletExternal := external.NewWalletExternal()
+	transactionService := services.NewTransactionService(transactionRepository, walletExternal)
 	transactionController := controller.NewTransactionController(transactionService)
 	dependency := Dependency{
 		TransactionController: transactionController,
