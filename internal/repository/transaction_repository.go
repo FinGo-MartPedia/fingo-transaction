@@ -38,7 +38,7 @@ func (r *TransactionRepository) UpdateStatusTransaction(ctx context.Context, ref
 	return r.DB.Exec("UPDATE transactions SET transaction_status = ?, additional_info = ? WHERE reference = ?", status, additional_info, reference).Error
 }
 
-func (r *TransactionRepository) GetTransaction(ctx context.Context, userID int) ([]models.Transaction, error) {
+func (r *TransactionRepository) GetTransactions(ctx context.Context, userID int) ([]models.Transaction, error) {
 	var (
 		resp []models.Transaction
 	)

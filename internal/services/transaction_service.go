@@ -33,13 +33,13 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, req *models.
 	req.TransactionStatus = constants.TransactionStatusPending
 	req.Reference = helpers.GenerateReference()
 
-	// jsonAdditionalInfo := map[string]interface{}{}
-	// if req.AdditionalInfo != "" {
-	// 	err := json.Unmarshal([]byte(req.AdditionalInfo), &jsonAdditionalInfo)
-	// 	if err != nil {
-	// 		return resp, errors.Wrap(err, "additional info type is invalid")
-	// 	}
-	// }
+	jsonAdditionalInfo := map[string]interface{}{}
+	if req.AdditionalInfo != "" {
+		err := json.Unmarshal([]byte(req.AdditionalInfo), &jsonAdditionalInfo)
+		if err != nil {
+			return resp, errors.Wrap(err, "additional info type is invalid")
+		}
+	}
 
 	err := s.TransactionRepository.CreateTransaction(ctx, req)
 	if err != nil {
@@ -70,7 +70,7 @@ func (s *TransactionService) UpdateStatusTransaction(ctx context.Context, tokenD
 		return fmt.Errorf("transaction status flow invalid. request status = %s", req.TransactionStatus)
 	}
 
-	// request update balance to ewallet-wallet
+	// request update balance to wallet service
 	reqUpdateBalance := requests.UpdateBalance{
 		Amount:    trx.Amount,
 		Reference: req.Reference,
@@ -144,4 +144,88 @@ func (s *TransactionService) UpdateStatusTransaction(ctx context.Context, tokenD
 	// s.sendNotification(ctx, tokenData, trx)
 
 	return nil
+}
+
+func (s *TransactionService) GetTransactions(ctx context.Context, userID int) ([]responses.TransactionResponse, error) {
+	transactions, err := s.TransactionRepository.GetTransactions(ctx, userID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get transactions")
+	}
+
+	transactionResponses := make([]responses.TransactionResponse, len(transactions))
+	for i, transaction := range transactions {
+		transactionResponses[i] = responses.TransactionResponse{
+			Amount:            transaction.Amount,
+			TransactionType:   transaction.TransactionType,
+			TransactionStatus: transaction.TransactionStatus,
+			Reference:         transaction.Reference,
+			Description:       transaction.Description,
+			AdditionalInfo:    transaction.AdditionalInfo,
+		}
+	}
+
+	return transactionResponses, nil
+}
+
+func (s *TransactionService) GetTransactionDetail(ctx context.Context, reference string) (responses.TransactionResponse, error) {
+	var resp responses.TransactionResponse
+
+	transaction, err := s.TransactionRepository.GetTransactionByReference(ctx, reference, true)
+	if err != nil {
+		return resp, errors.Wrap(err, "failed to get transaction detail")
+	}
+
+	resp = responses.TransactionResponse{
+		Amount:            transaction.Amount,
+		TransactionType:   transaction.TransactionType,
+		TransactionStatus: transaction.TransactionStatus,
+		Reference:         transaction.Reference,
+		Description:       transaction.Description,
+		AdditionalInfo:    transaction.AdditionalInfo,
+	}
+	return resp, nil
+}
+
+func (s *TransactionService) RefundTransaction(ctx context.Context, token string, userId int, req *requests.RefundTransaction) (responses.CreateTransactionResponse, error) {
+	var (
+		resp responses.CreateTransactionResponse
+	)
+
+	trx, err := s.TransactionRepository.GetTransactionByReference(ctx, req.Reference, false)
+	if err != nil {
+		return resp, errors.Wrap(err, "failed to get transaction")
+	}
+
+	if trx.TransactionStatus != constants.TransactionStatusSuccess || trx.TransactionType != constants.TransactionTypePurchase {
+		return resp, errors.New("current transaction status is not success or transaction type is not purchase")
+	}
+
+	refundReference := "REFUND-" + req.Reference
+	reqCreditBalance := requests.UpdateBalance{
+		Reference: refundReference,
+		Amount:    trx.Amount,
+	}
+	_, err = s.WalletExternal.CreditBalance(ctx, token, reqCreditBalance)
+	if err != nil {
+		return resp, errors.Wrap(err, "failed to credit balance")
+	}
+
+	transaction := models.Transaction{
+		UserID:            userId,
+		Amount:            trx.Amount,
+		TransactionType:   constants.TransactionTypeRefund,
+		TransactionStatus: constants.TransactionStatusSuccess,
+		Reference:         refundReference,
+		Description:       req.Description,
+		AdditionalInfo:    req.AdditionalInfo,
+	}
+	err = s.TransactionRepository.CreateTransaction(ctx, &transaction)
+	if err != nil {
+		return resp, errors.Wrap(err, "failed to insert new transaction refund")
+	}
+
+	resp.Reference = refundReference
+	resp.TransactionStatus = transaction.TransactionStatus
+
+	return resp, nil
 }
